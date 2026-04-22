@@ -1,4 +1,4 @@
-.PHONY: dev run worker build build-worker test test-coverage lint tidy \
+.PHONY: dev run worker seed build build-worker test test-coverage lint tidy \
         docker-up docker-down setup-local
 
 # ── Development (no Docker required) ────────────────────────────────────────
@@ -26,6 +26,10 @@ run:
 # Run background worker
 worker:
 	go run ./cmd/worker
+
+# Seed development database (idempotent)
+seed:
+	go run ./cmd/seed
 
 # ── Build ───────────────────────────────────────────────────────────────────
 
