@@ -156,6 +156,37 @@ func buildSchemas() map[string]Schema {
 			},
 		},
 
+		// ── API Keys ───────────────────────────────────────────────────────
+
+		"APIKey": {
+			Type: "object",
+			Properties: map[string]Schema{
+				"id":           uuid_(""),
+				"name":         str("Human-readable label"),
+				"prefix":       str("First 8 chars of key for identification (e.g. allposty_abcd1234)"),
+				"scopes":       arr(str("Granted scope")),
+				"last_used_at": ts(""),
+				"expires_at":   ts("Null = never expires"),
+				"revoked":      {Type: "boolean"},
+				"created_at":   ts(""),
+			},
+		},
+
+		"APIKeyCreated": {
+			Type:        "object",
+			Description: "Returned once on creation. The plaintext key is never stored and cannot be retrieved again.",
+			Properties: map[string]Schema{
+				"key":        str("Full plaintext key — store it now, it won't be shown again"),
+				"id":         uuid_(""),
+				"name":       str(""),
+				"prefix":     str(""),
+				"scopes":     arr(str("")),
+				"expires_at": ts(""),
+				"created_at": ts(""),
+			},
+			Required: []string{"key", "id", "name", "prefix", "scopes"},
+		},
+
 		// ── Shared ─────────────────────────────────────────────────────────
 
 		"Error": {

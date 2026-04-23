@@ -258,6 +258,29 @@ Supported platforms: `instagram`, `facebook`, `linkedin`, `twitter`, `tiktok`, `
 |---|---|---|---|
 | `POST` | `/api/v1/ai/caption` | Generate caption from topic + platform + tone | Pro / Agency |
 
+### API keys
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/api-keys` | Create key — plaintext returned once, never stored again |
+| `GET` | `/api/v1/api-keys` | List your keys (prefix + metadata, no plaintext) |
+| `GET` | `/api/v1/api-keys/scopes` | List valid scope strings |
+| `DELETE` | `/api/v1/api-keys/:id` | Revoke a key |
+
+**Authentication:** send the key as `Authorization: Bearer allposty_<key>` — same header as JWT, detected by prefix.
+
+**Scopes:** `*` (full access), `posts:read`, `posts:write`, `social:read`, `media:read`, `media:write`, `ai:write`
+
+**Rate limits (requests/minute):**
+
+| Plan | Limit |
+|---|---|
+| Free | 60 |
+| Pro | 300 |
+| Agency | 1000 |
+
+Rate limit headers are returned on every API key request: `X-RateLimit-Limit`, `X-RateLimit-Remaining`. Exceeding the limit returns HTTP `429`.
+
 ### Billing
 
 | Method | Path | Description |

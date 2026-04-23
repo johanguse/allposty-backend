@@ -6,6 +6,7 @@ import (
 	"github.com/allposty/allposty-backend/internal/config"
 	"github.com/allposty/allposty-backend/internal/database"
 	aihandler "github.com/allposty/allposty-backend/internal/handlers/ai"
+	apikeyhandler "github.com/allposty/allposty-backend/internal/handlers/apikeys"
 	authhandler "github.com/allposty/allposty-backend/internal/handlers/auth"
 	billinghandler "github.com/allposty/allposty-backend/internal/handlers/billing"
 	mediahandler "github.com/allposty/allposty-backend/internal/handlers/media"
@@ -64,6 +65,7 @@ func main() {
 	postRepo := repository.NewPostRepository(db)
 	mediaRepo := repository.NewMediaRepository(db)
 	subRepo := repository.NewSubscriptionRepository(db)
+	apiKeyRepo := repository.NewAPIKeyRepository(db)
 
 	// Shared deps
 	providerRegistry := providers.NewRegistry(cfg)
@@ -71,6 +73,10 @@ func main() {
 	stateStore, err := storage.NewStateStore(cfg.Redis.URL)
 	if err != nil {
 		zapLog.Fatal("state store", zap.Error(err))
+	}
+	rateLimiter, err := storage.NewRateLimiter(cfg.Redis.URL)
+	if err != nil {
+		zapLog.Fatal("rate limiter", zap.Error(err))
 	}
 
 	// Services
@@ -80,6 +86,7 @@ func main() {
 	mediaSvc := services.NewMediaService(mediaRepo, orgSvc, r2)
 	aiSvc := services.NewAIService(cfg.OpenAI.APIKey)
 	billingSvc := services.NewBillingService(orgRepo, userRepo, subRepo, cfg)
+	apiKeySvc := services.NewAPIKeyService(apiKeyRepo)
 
 	// Handlers
 	authH := authhandler.NewHandler(authSvc, userRepo)
@@ -89,6 +96,7 @@ func main() {
 	mediaH := mediahandler.NewHandler(mediaSvc)
 	aiH := aihandler.NewHandler(aiSvc)
 	billingH := billinghandler.NewHandler(billingSvc, cfg.Frontend)
+	apiKeyH := apikeyhandler.NewHandler(apiKeySvc)
 
 	// Fiber
 	app := fiber.New(fiber.Config{
@@ -127,11 +135,11 @@ func main() {
 	v1 := app.Group("/api/v1")
 
 	// ── Public ──────────────────────────────────────────────────────────────
-	auth := v1.Group("/auth")
-	auth.Post("/register", authH.Register)
-	auth.Post("/login", authH.Login)
-	auth.Post("/refresh", authH.Refresh)
-	auth.Post("/logout", authH.Logout)
+	authGroup := v1.Group("/auth")
+	authGroup.Post("/register", authH.Register)
+	authGroup.Post("/login", authH.Login)
+	authGroup.Post("/refresh", authH.Refresh)
+	authGroup.Post("/logout", authH.Logout)
 
 	// OAuth callbacks come back from social platforms — must be public
 	v1.Get("/social/callback/:platform", socialH.Callback)
@@ -140,7 +148,8 @@ func main() {
 	v1.Post("/billing/webhook", billingH.Webhook)
 
 	// ── Protected ───────────────────────────────────────────────────────────
-	p := v1.Group("", middleware.JWT(cfg.JWT.Secret))
+	authMiddleware := middleware.JWT(cfg.JWT.Secret, apiKeySvc, userRepo, rateLimiter)
+	p := v1.Group("", authMiddleware)
 
 	// Auth
 	p.Get("/auth/me", authH.Me)
@@ -171,6 +180,12 @@ func main() {
 
 	// AI
 	p.Post("/ai/caption", middleware.RequireAI(userRepo), aiH.GenerateCaption)
+
+	// API keys
+	p.Post("/api-keys", apiKeyH.Create)
+	p.Get("/api-keys", apiKeyH.List)
+	p.Get("/api-keys/scopes", apiKeyH.Scopes)
+	p.Delete("/api-keys/:id", apiKeyH.Revoke)
 
 	// Billing
 	p.Post("/billing/checkout", billingH.CreateCheckout)

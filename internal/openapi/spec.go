@@ -21,6 +21,7 @@ func Build(serverURL string) Spec {
 			{Name: "posts", Description: "Post composer, scheduling, calendar"},
 			{Name: "media", Description: "Media library"},
 			{Name: "ai", Description: "AI-assisted caption generation"},
+			{Name: "api-keys", Description: "Long-lived API keys for programmatic access"},
 			{Name: "billing", Description: "Stripe subscription management"},
 		},
 		Components: Components{
@@ -29,8 +30,8 @@ func Build(serverURL string) Spec {
 				"bearerAuth": {
 					Type:         "http",
 					Scheme:       "bearer",
-					BearerFormat: "JWT",
-					Description:  "Access token from /auth/login or /auth/register",
+					BearerFormat: "JWT or allposty_*",
+					Description:  "JWT access token from /auth/login, or an API key (allposty_...) from /api-keys",
 				},
 			},
 		},
@@ -453,6 +454,66 @@ func buildPaths() map[string]PathItem {
 				Responses: map[string]Response{
 					"200": jsonResponse("Generated caption", ref("CaptionResult")),
 					"500": errResponse("OpenAI error"),
+				},
+			},
+		},
+
+		// ── API Keys ───────────────────────────────────────────────────────
+
+		"/api-keys": {
+			Post: &Operation{
+				OperationID: "createAPIKey",
+				Summary:     "Create an API key — plaintext returned once, save it immediately",
+				Tags:        []string{"api-keys"},
+				Security:    bearer(),
+				RequestBody: jsonBody(Schema{
+					Type:     "object",
+					Required: []string{"name"},
+					Properties: map[string]Schema{
+						"name":       str("Human-readable label, e.g. 'CI pipeline'"),
+						"scopes":     arr(str("Scope string. Omit for full access (*)")),
+						"expires_at": ts("Omit for non-expiring key"),
+					},
+				}),
+				Responses: map[string]Response{
+					"201": jsonResponse("Created — save the key now", ref("APIKeyCreated")),
+					"400": errResponse("Invalid scope"),
+				},
+			},
+			Get: &Operation{
+				OperationID: "listAPIKeys",
+				Summary:     "List API keys for the current user",
+				Tags:        []string{"api-keys"},
+				Security:    bearer(),
+				Responses: map[string]Response{
+					"200": jsonResponse("OK", arr(ref("APIKey"))),
+				},
+			},
+		},
+
+		"/api-keys/scopes": {
+			Get: &Operation{
+				OperationID: "listAPIKeyScopes",
+				Summary:     "List all valid scope strings",
+				Tags:        []string{"api-keys"},
+				Security:    bearer(),
+				Responses: map[string]Response{
+					"200": jsonResponse("OK", arr(str("Scope string"))),
+				},
+			},
+		},
+
+		"/api-keys/{id}": {
+			Delete: &Operation{
+				OperationID: "revokeAPIKey",
+				Summary:     "Revoke an API key",
+				Tags:        []string{"api-keys"},
+				Security:    bearer(),
+				Parameters:  []Parameter{pathParam("id", "API key ID")},
+				Responses: map[string]Response{
+					"204": {Description: "Revoked"},
+					"403": errResponse("Not your key"),
+					"404": errResponse("Not found"),
 				},
 			},
 		},

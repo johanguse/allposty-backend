@@ -34,5 +34,6 @@ func Migrate(db *gorm.DB) error {
 		&models.MediaFile{},
 		&models.Subscription{},
 		&models.RefreshToken{},
+		&models.APIKey{},
 	)
 }
